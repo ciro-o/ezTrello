@@ -24,13 +24,16 @@ vercel        # seguí los pasos; luego "vercel --prod"
 ```
 
 ### 2. Conectar la base Redis (esto es lo que hace que se comparta)
-Vercel KV ya no existe: ahora se usa **Redis desde el Marketplace** (Upstash o Redis Cloud).
+Vercel KV ya no existe: ahora se usa **Redis desde el Marketplace** (Redis Cloud o Upstash).
 
-1. En el proyecto en Vercel → pestaña **Storage** → **Create Database**.
-2. Elegí **Redis** (Upstash) → **Continue** → creá la base y **conectala a este proyecto**.
-3. Vercel inyecta solo las variables de entorno **`KV_REST_API_URL`** y **`KV_REST_API_TOKEN`**.
-   (El backend también acepta `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` por si el
-   proveedor usa esos nombres.)
+1. En el proyecto en Vercel → pestaña **Storage** → **Create Database** → **Redis**.
+2. Creá la base y hacé **Connect to Project**.
+3. El backend acepta las dos variantes de credenciales, así que sirve cualquiera:
+   - **Redis Cloud** → inyecta **`REDIS_URL`** (cadena `redis://…`). ✅ es la que estás usando.
+   - **Upstash** → inyecta **`KV_REST_API_URL`** + **`KV_REST_API_TOKEN`**.
+
+> Importante: si conectaste la base **después** de desplegar, hacé un **Redeploy** para que el
+> deploy tome la variable `REDIS_URL`.
 
 ### 3. Redeploy
 Volvé a desplegar (**Deployments → Redeploy**, o `vercel --prod`).
