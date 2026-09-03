@@ -1,0 +1,7 @@
+{
+  "name": "eztrello",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Panel de tareas ezTrello con almacenamiento compartido (Vercel + Redis)."
+}

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ezTrello — Panel de tareas</title>
+<style>
+  :root{
+    --bg:#08070f; --bg-2:#0d0b18;
+    --panel:rgba(26,22,44,.55); --panel-solid:#15121f;
+    --stroke:rgba(139,92,246,.16); --stroke-strong:rgba(139,92,246,.4);
+    --violet:#8b5cf6; --violet-lo:#a78bfa;
+    --txt:#eceafc; --muted:#9b97b8; --muted-2:#6f6b8c;
+    --por-iniciar:#7c8598; --en-proceso:#f5a524; --test:#22d3ee; --completado:#34d399;
+    --r:16px; --r-sm:10px;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--font);color:var(--txt);background:var(--bg);
+    background-image:
+      radial-gradient(900px 520px at 12% -8%, rgba(124,92,246,.22), transparent 60%),
+      radial-gradient(1000px 620px at 108% 12%, rgba(59,45,120,.28), transparent 55%),
+      radial-gradient(700px 700px at 60% 120%, rgba(88,60,180,.14), transparent 60%);
+    background-attachment:fixed;-webkit-font-smoothing:antialiased;overflow:hidden;
+  }
+  .app{display:grid;grid-template-columns:296px 1fr;height:100vh}
+
+  /* ---------- Sidebar ---------- */
+  .side{
+    border-right:1px solid var(--stroke);
+    background:linear-gradient(180deg, rgba(20,16,34,.85), rgba(10,8,18,.7));
+    backdrop-filter:blur(14px);display:flex;flex-direction:column;min-height:0;
+  }
+  .brand{padding:20px 20px 6px;display:flex;align-items:center;gap:11px}
+  .brand .glyph{
+    width:34px;height:34px;border-radius:10px;flex:none;
+    background:linear-gradient(140deg,var(--violet),#5b34c9);
+    box-shadow:0 6px 22px rgba(124,92,246,.45), inset 0 0 0 1px rgba(255,255,255,.12);
+    display:grid;place-items:center;font-weight:800;font-size:15px;color:#fff;
+  }
+  .brand h1{font-size:21px;font-weight:700;letter-spacing:-.4px}
+  .brand h1 span{color:var(--violet-lo)}
+
+  .connpill{
+    margin:0 20px 10px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:7px;
+  }
+  .connpill .d{width:7px;height:7px;border-radius:50%;background:var(--muted-2);box-shadow:0 0 8px currentColor}
+  .connpill.shared{color:var(--completado)} .connpill.shared .d{background:var(--completado)}
+  .connpill.local{color:var(--en-proceso)} .connpill.local .d{background:var(--en-proceso)}
+
+  .newbtn{
+    margin:2px 18px 12px;padding:11px 14px;border:none;cursor:pointer;
+    border-radius:var(--r-sm);color:#fff;font-size:14px;font-weight:600;font-family:inherit;
+    background:linear-gradient(135deg,var(--violet),#6d3fe0);box-shadow:0 8px 24px rgba(124,92,246,.35);
+    display:flex;align-items:center;justify-content:center;gap:8px;transition:transform .12s, box-shadow .12s;
+  }
+  .newbtn:hover{transform:translateY(-1px);box-shadow:0 12px 30px rgba(124,92,246,.5)}
+  .newbtn:active{transform:translateY(0)}
+
+  .searchwrap{padding:0 18px 10px;position:relative}
+  .searchwrap svg{position:absolute;left:30px;top:50%;transform:translateY(-50%);opacity:.5;pointer-events:none}
+  #searchInput{
+    width:100%;background:rgba(8,7,15,.5);border:1px solid var(--stroke);color:var(--txt);
+    border-radius:var(--r-sm);padding:10px 12px 10px 34px;font-size:13.5px;font-family:inherit;transition:.12s;
+  }
+  #searchInput::placeholder{color:var(--muted-2)}
+  #searchInput:focus{outline:none;border-color:var(--stroke-strong);background:rgba(139,92,246,.06);box-shadow:0 0 0 3px rgba(139,92,246,.12)}
+
+  .filters{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 12px}
+  .fchip{
+    font-size:11.5px;padding:5px 10px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--stroke);background:rgba(255,255,255,.02);color:var(--muted);
+    display:flex;align-items:center;gap:6px;user-select:none;transition:.12s;
+  }
+  .fchip .d{width:7px;height:7px;border-radius:50%}
+  .fchip.active{border-color:var(--stroke-strong);background:rgba(139,92,246,.14);color:var(--txt)}
+
+  .tasklist{flex:1;overflow-y:auto;padding:2px 12px 18px}
+  .tasklist::-webkit-scrollbar{width:8px}
+  .tasklist::-webkit-scrollbar-thumb{background:rgba(139,92,246,.22);border-radius:8px}
+
+  .task{
+    display:flex;align-items:center;gap:10px;padding:11px 12px;border-radius:12px;cursor:pointer;
+    border:1px solid transparent;transition:.12s;margin-bottom:3px;
+  }
+  .task:hover{background:rgba(139,92,246,.08)}
+  .task.sel{background:rgba(139,92,246,.16);border-color:var(--stroke-strong)}
+  .task .dot{width:9px;height:9px;border-radius:50%;flex:none;box-shadow:0 0 9px currentColor}
+  .task .meta{min-width:0;flex:1}
+  .task .nm{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .task .nm.empty{color:var(--muted-2);font-style:italic;font-weight:400}
+  .task .sub{font-size:11px;color:var(--muted-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+  .empty-list{color:var(--muted-2);font-size:13px;text-align:center;padding:34px 16px;line-height:1.6}
+
+  /* ---------- Main / detail ---------- */
+  .main{min-width:0;overflow-y:auto;padding:26px 30px 40px}
+  .main::-webkit-scrollbar{width:10px}
+  .main::-webkit-scrollbar-thumb{background:rgba(139,92,246,.2);border-radius:8px}
+  .placeholder{height:100%;display:grid;place-items:center;text-align:center;color:var(--muted)}
+  .placeholder .big{font-size:26px;font-weight:600;color:var(--txt);margin-bottom:8px;letter-spacing:-.4px}
+
+  .detail{max-width:860px;margin:0 auto}
+  .dhead{display:flex;align-items:flex-start;gap:16px;margin-bottom:22px}
+  .titlewrap{flex:1;min-width:0}
+  .titlewrap input.title{
+    width:100%;background:transparent;border:none;color:var(--txt);font-family:inherit;
+    font-size:30px;font-weight:700;letter-spacing:-.6px;padding:4px 2px;border-radius:8px;
+  }
+  .titlewrap input.title::placeholder{color:var(--muted-2)}
+  .titlewrap input.title:focus{outline:none;background:rgba(139,92,246,.07)}
+  .del{
+    flex:none;border:1px solid var(--stroke);background:rgba(255,80,90,.06);color:#ff8b93;
+    border-radius:10px;padding:9px 12px;cursor:pointer;font-size:13px;font-family:inherit;transition:.12s;
+  }
+  .del:hover{background:rgba(255,80,90,.16);border-color:rgba(255,80,90,.4)}
+
+  .card{
+    background:var(--panel);border:1px solid var(--stroke);border-radius:var(--r);
+    backdrop-filter:blur(16px);padding:22px 24px;margin-bottom:18px;
+    box-shadow:0 20px 50px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .card > .clabel{
+    font-size:12px;color:var(--violet-lo);font-weight:600;letter-spacing:.3px;margin-bottom:16px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .card > .clabel::before{content:"";width:14px;height:2px;border-radius:2px;background:var(--violet)}
+
+  .field{margin-bottom:16px}
+  .field:last-child{margin-bottom:0}
+  .field > label{display:block;font-size:12.5px;color:var(--muted);margin-bottom:7px;font-weight:500}
+
+  .input,textarea.input,select.input{
+    width:100%;background:rgba(8,7,15,.5);border:1px solid var(--stroke);color:var(--txt);
+    border-radius:var(--r-sm);padding:11px 13px;font-size:14px;font-family:inherit;transition:.12s;
+  }
+  .input:focus,textarea.input:focus,select.input:focus{
+    outline:none;border-color:var(--stroke-strong);background:rgba(139,92,246,.06);box-shadow:0 0 0 3px rgba(139,92,246,.12);
+  }
+  textarea.input{resize:vertical;min-height:96px;line-height:1.55}
+  .input::placeholder,textarea.input::placeholder{color:var(--muted-2)}
+  select.input{appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%239b97b8' stroke-width='2'><path d='M2 4l4 4 4-4'/></svg>");
+    background-repeat:no-repeat;background-position:right 13px center;padding-right:34px;
+  }
+  select.input option,select.input optgroup{background:var(--panel-solid);color:var(--txt)}
+
+  .linkrow{display:flex;gap:8px}
+  .linkrow .input{flex:1}
+  .openbtn{
+    flex:none;border:1px solid var(--stroke);background:rgba(139,92,246,.1);color:var(--violet-lo);
+    border-radius:var(--r-sm);padding:0 15px;cursor:pointer;font-size:13px;font-family:inherit;
+    display:flex;align-items:center;gap:6px;text-decoration:none;transition:.12s;
+  }
+  .openbtn:hover{background:rgba(139,92,246,.22)}
+  .openbtn.off{opacity:.4;pointer-events:none}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+  .states{display:flex;flex-wrap:wrap;gap:9px}
+  .state{
+    --c:var(--muted);display:flex;align-items:center;gap:8px;padding:9px 15px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--stroke);background:rgba(255,255,255,.02);color:var(--muted);
+    font-size:13.5px;font-weight:500;font-family:inherit;transition:.14s;user-select:none;
+  }
+  .state .d{width:9px;height:9px;border-radius:50%;background:var(--c)}
+  .state:hover{border-color:color-mix(in srgb,var(--c) 55%,transparent)}
+  .state.on{
+    color:#fff;border-color:color-mix(in srgb,var(--c) 70%,transparent);
+    background:color-mix(in srgb,var(--c) 20%,transparent);
+    box-shadow:0 0 22px -6px var(--c), inset 0 0 0 1px color-mix(in srgb,var(--c) 30%,transparent);
+  }
+  .state.on .d{box-shadow:0 0 10px var(--c)}
+
+  .badge{
+    display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border-radius:999px;
+    font-size:12.5px;font-weight:600;white-space:nowrap;flex:none;
+    border:1px solid color-mix(in srgb,var(--c) 45%,transparent);
+    background:color-mix(in srgb,var(--c) 16%,transparent);color:#fff;
+  }
+  .badge .d{width:8px;height:8px;border-radius:50%;background:var(--c);box-shadow:0 0 8px var(--c)}
+
+  .saved{
+    position:fixed;bottom:22px;right:26px;background:rgba(20,16,34,.9);border:1px solid var(--stroke-strong);
+    color:var(--violet-lo);padding:9px 16px;border-radius:10px;font-size:13px;backdrop-filter:blur(10px);
+    opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.5);
+  }
+  .saved.show{opacity:1;transform:translateY(0)}
+  input[type=date].input{color-scheme:dark}
+
+  @media(max-width:860px){
+    body{overflow:auto}
+    .app{grid-template-columns:1fr;height:auto}
+    .side{border-right:none;border-bottom:1px solid var(--stroke)}
+    .tasklist{max-height:240px}
+    .main{padding:22px 18px 40px}
+    .grid2{grid-template-columns:1fr}
+    .titlewrap input.title{font-size:24px}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="glyph">ez</div>
+      <h1>ez<span>Trello</span></h1>
+    </div>
+    <div class="connpill" id="connPill"><span class="d"></span><span id="connText">Conectando…</span></div>
+    <button class="newbtn" id="newBtn">+ Nueva tarea</button>
+    <div class="searchwrap">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="searchInput" placeholder="Buscar tarea o card…" autocomplete="off" />
+    </div>
+    <div class="filters" id="filters"></div>
+    <div class="tasklist" id="taskList"></div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div class="saved" id="savedToast">Guardado</div>
+
+<script>
+/* ===================== Config ===================== */
+const STATES = [
+  {id:"por-iniciar", label:"Por iniciar", varc:"--por-iniciar"},
+  {id:"en-proceso",  label:"En Proceso",  varc:"--en-proceso"},
+  {id:"test",        label:"Test",        varc:"--test"},
+  {id:"completado",  label:"Completado",  varc:"--completado"},
+];
+const stateById = id => STATES.find(s=>s.id===id) || STATES[0];
+
+const PMS  = ["Guido Rocha"];
+const DEVS = ["Ciro Fernandez","Martin Sebastian"];
+
+/* ===================== Estado ===================== */
+let tasks = [];
+let selectedId = null;
+let filter = "all";
+let search = "";
+let backend = "checking";        // "shared" | "local"
+let lastLocalEdit = 0;
+
+const KEY = "ezTrello.tasks.v2";
+const uid = () => "t"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function newTask(nombre=""){
+  return { id:uid(), nombre, nombreTrello:"", link:"", descripcion:"",
+           estado:"por-iniciar", fechaInicio:"", fechaFin:"", pm:"", dev:"" };
+}
+const seed = () => ["Tarea 1","Tarea 2","Tarea 3","Tarea 4"].map(n=>newTask(n));
+
+function migrate(t){
+  if(t.pm===undefined) t.pm="";
+  if(t.dev===undefined) t.dev="";
+  if(t.asignado && !t.pm && !t.dev){
+    if(/^\s*PM\s*:/i.test(t.asignado)) t.pm=t.asignado.replace(/^\s*PM\s*:\s*/i,"").trim();
+    else t.dev=t.asignado.replace(/^\s*AI\s*Agent\s*Dev\s*:\s*/i,"").trim();
+  }
+  delete t.asignado;
+  return t;
+}
+
+/* ===================== Backend compartido + fallback local ===================== */
+async function apiGet(){
+  try{
+    const r=await fetch("/api/tasks",{cache:"no-store"});
+    if(!r.ok) throw new Error("no api");
+    const j=await r.json();
+    backend="shared"; return j.tasks;          // array | null
+  }catch(e){ backend="local"; return undefined; } // undefined = sin backend
+}
+async function apiPut(data){
+  try{
+    const r=await fetch("/api/tasks",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({tasks:data})});
+    if(!r.ok) throw new Error("no api");
+    backend="shared"; return true;
+  }catch(e){ backend="local"; return false; }
+}
+function loadLocal(){ try{ const r=localStorage.getItem(KEY); return r?JSON.parse(r):null; }catch(e){ return null; } }
+function saveLocal(d){ try{ localStorage.setItem(KEY,JSON.stringify(d)); }catch(e){} }
+
+let saveTimer=null;
+function persist(){
+  lastLocalEdit=Date.now();
+  saveLocal(tasks);
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(async()=>{
+    await apiPut(tasks);
+    updateConn();
+    const t=document.getElementById("savedToast");
+    t.textContent = backend==="shared" ? "Guardado en la nube" : "Guardado (local)";
+    t.classList.add("show"); clearTimeout(t._h);
+    t._h=setTimeout(()=>t.classList.remove("show"),1200);
+  },350);
+}
+
+function updateConn(){
+  const p=document.getElementById("connPill"), t=document.getElementById("connText");
+  p.className="connpill "+(backend==="shared"?"shared":"local");
+  t.textContent = backend==="shared" ? "Compartido — todos ven lo mismo" : "Local — solo este navegador";
+}
+
+/* ===================== Helpers ===================== */
+const $ = s => document.querySelector(s);
+const esc = s => (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const norm = s => (s||"").toLowerCase();
+
+/* ===================== Filtros / búsqueda ===================== */
+function visibleTasks(){
+  return tasks.filter(t=>{
+    if(filter!=="all" && t.estado!==filter) return false;
+    if(search){
+      const q=norm(search);
+      if(!norm(t.nombre).includes(q) && !norm(t.nombreTrello).includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderFilters(){
+  const box=$("#filters"); box.innerHTML="";
+  const counts={all:tasks.length};
+  STATES.forEach(s=>counts[s.id]=tasks.filter(t=>t.estado===s.id).length);
+  const mk=(id,label,varc)=>{
+    const el=document.createElement("button");
+    el.className="fchip"+(filter===id?" active":"");
+    el.innerHTML=(varc?`<span class="d" style="background:var(${varc})"></span>`:"")+esc(label)+` (${counts[id]||0})`;
+    el.onclick=()=>{filter=id;renderFilters();renderList();};
+    box.appendChild(el);
+  };
+  mk("all","Todas");
+  STATES.forEach(s=>mk(s.id,s.label,s.varc));
+}
+
+function renderList(){
+  const list=$("#taskList"); list.innerHTML="";
+  const shown=visibleTasks();
+  if(!shown.length){
+    list.innerHTML=`<div class="empty-list">${tasks.length? "Nada coincide con el filtro/búsqueda." : "No hay tareas todavía."}<br>${tasks.length?"":"Creá una con <b>+ Nueva tarea</b>."}</div>`;
+    return;
+  }
+  shown.forEach(t=>{
+    const st=stateById(t.estado);
+    const el=document.createElement("div");
+    el.className="task"+(t.id===selectedId?" sel":"");
+    const nombre=(t.nombre||"").trim();
+    el.innerHTML=`
+      <span class="dot" style="color:var(${st.varc})"></span>
+      <div class="meta">
+        <div class="nm ${nombre?"":"empty"}">${nombre?esc(nombre):"Sin nombre"}</div>
+        <div class="sub">${t.nombreTrello?esc(t.nombreTrello)+" · ":""}${esc(st.label)}</div>
+      </div>`;
+    el.onclick=()=>{selectedId=t.id;renderList();renderDetail();};
+    list.appendChild(el);
+  });
+}
+
+/* ===================== Detalle ===================== */
+function selectOptions(list, current){
+  let out=`<option value=""${!current?" selected":""}>Sin asignar</option>`;
+  list.forEach(p=>out+=`<option value="${esc(p)}"${current===p?" selected":""}>${esc(p)}</option>`);
+  return out;
+}
+
+function renderDetail(){
+  const main=$("#main");
+  const t=tasks.find(x=>x.id===selectedId);
+  if(!t){
+    main.innerHTML=`<div class="placeholder"><div>
+      <div class="big">Elegí una tarea</div>
+      <div>Seleccioná una tarea de la izquierda o creá una nueva para empezar a editar.</div>
+    </div></div>`;
+    return;
+  }
+  const st=stateById(t.estado);
+  const stateChips=STATES.map(s=>`
+    <button class="state${s.id===t.estado?" on":""}" data-st="${s.id}" style="--c:var(${s.varc})">
+      <span class="d"></span>${esc(s.label)}
+    </button>`).join("");
+  const linkHref = t.link && /^https?:\/\//i.test(t.link) ? t.link : (t.link?("https://"+t.link.replace(/^\/+/,"")):"");
+
+  main.innerHTML=`
+  <div class="detail">
+    <div class="dhead">
+      <div class="titlewrap">
+        <input class="title" id="f_nombre" placeholder="Nombre de la tarea…" value="${esc(t.nombre)}" />
+      </div>
+      <span class="badge" style="--c:var(${st.varc})"><span class="d"></span>${esc(st.label)}</span>
+      <button class="del" id="delBtn">Eliminar</button>
+    </div>
+
+    <div class="card">
+      <div class="clabel">Identificación</div>
+      <div class="field">
+        <label>Nombre Trello — ¿a qué card pertenece?</label>
+        <input class="input" id="f_trello" placeholder="Ej.: Sprint 12 · Integraciones" value="${esc(t.nombreTrello)}" />
+      </div>
+      <div class="field">
+        <label>Nombre</label>
+        <input class="input" id="f_nombre2" placeholder="Aca va el nombre de la tarea" value="${esc(t.nombre)}" />
+      </div>
+      <div class="field">
+        <label>Link</label>
+        <div class="linkrow">
+          <input class="input" id="f_link" placeholder="Aca se agrega el link" value="${esc(t.link)}" />
+          <a class="openbtn ${linkHref?"":"off"}" id="openLink" href="${esc(linkHref)}" target="_blank" rel="noopener">↗ Abrir</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="clabel">Estado</div>
+      <div class="states" id="states">${stateChips}</div>
+    </div>
+
+    <div class="card">
+      <div class="clabel">Planificación</div>
+      <div class="grid2">
+        <div class="field"><label>Fecha de inicio</label>
+          <input class="input" type="date" id="f_ini" value="${esc(t.fechaInicio)}" /></div>
+        <div class="field"><label>Fecha de finalización</label>
+          <input class="input" type="date" id="f_fin" value="${esc(t.fechaFin)}" /></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>PM</label>
+          <select class="input" id="f_pm">${selectOptions(PMS, t.pm)}</select></div>
+        <div class="field"><label>AI Agent Dev</label>
+          <select class="input" id="f_dev">${selectOptions(DEVS, t.dev)}</select></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="clabel">Descripción</div>
+      <div class="field">
+        <textarea class="input" id="f_desc" placeholder="Detalle de la tarea, contexto, pasos…">${esc(t.descripcion)}</textarea>
+      </div>
+    </div>
+  </div>`;
+
+  const set=(f,v)=>{ t[f]=v; persist(); };
+  const nombreInputs=[$("#f_nombre"),$("#f_nombre2")];
+  nombreInputs.forEach(inp=>inp.addEventListener("input",e=>{
+    t.nombre=e.target.value;
+    nombreInputs.forEach(o=>{ if(o!==e.target) o.value=e.target.value; });
+    renderList(); persist();
+  }));
+  $("#f_trello").addEventListener("input",e=>{ set("nombreTrello",e.target.value); renderList(); });
+  $("#f_link").addEventListener("input",e=>{
+    set("link",e.target.value);
+    const href=e.target.value && /^https?:\/\//i.test(e.target.value)?e.target.value:(e.target.value?("https://"+e.target.value.replace(/^\/+/,"")):"");
+    const a=$("#openLink"); a.href=href; a.classList.toggle("off",!href);
+  });
+  $("#f_ini").addEventListener("change",e=>set("fechaInicio",e.target.value));
+  $("#f_fin").addEventListener("change",e=>set("fechaFin",e.target.value));
+  $("#f_pm").addEventListener("change",e=>set("pm",e.target.value));
+  $("#f_dev").addEventListener("change",e=>set("dev",e.target.value));
+  $("#f_desc").addEventListener("input",e=>set("descripcion",e.target.value));
+  $("#states").querySelectorAll(".state").forEach(btn=>{
+    btn.onclick=()=>{ t.estado=btn.dataset.st; persist(); renderFilters(); renderList(); renderDetail(); };
+  });
+  $("#delBtn").onclick=()=>{
+    if(!confirm("¿Eliminar esta tarea?")) return;
+    tasks=tasks.filter(x=>x.id!==t.id);
+    selectedId=tasks[0]?.id||null;
+    persist(); renderFilters(); renderList(); renderDetail();
+  };
+}
+
+/* ===================== Acciones ===================== */
+$("#newBtn").onclick=()=>{
+  const t=newTask("");
+  tasks.push(t); selectedId=t.id;
+  if(filter!=="all" && filter!==t.estado) filter="all";
+  search=""; $("#searchInput").value="";
+  persist(); renderFilters(); renderList(); renderDetail();
+  setTimeout(()=>{ const el=$("#f_nombre"); if(el) el.focus(); },30);
+};
+$("#searchInput").addEventListener("input",e=>{ search=e.target.value; renderList(); });
+
+/* ===================== Sincronización (multiusuario) ===================== */
+async function poll(){
+  if(backend!=="shared") return;
+  const ae=document.activeElement;
+  const editing = ae && ae.closest && ae.closest("#main");     // no pisar edición en curso
+  if(editing) return;
+  if(Date.now()-lastLocalEdit < 4000) return;                 // no pisar guardado reciente
+  const remote=await apiGet();
+  if(Array.isArray(remote)){
+    remote.forEach(migrate);
+    if(JSON.stringify(remote)!==JSON.stringify(tasks)){
+      tasks=remote;
+      if(!tasks.find(t=>t.id===selectedId)) selectedId=tasks[0]?.id||null;
+      renderFilters(); renderList(); renderDetail();
+    }
+  }
+  updateConn();
+}
+
+/* ===================== Init ===================== */
+(async function init(){
+  const remote=await apiGet();
+  if(remote===undefined){                 // sin backend -> local
+    tasks=(loadLocal()||seed());
+  }else if(remote===null){                 // backend vacío -> sembrar
+    tasks=seed(); await apiPut(tasks);
+  }else{
+    tasks=remote;
+  }
+  tasks.forEach(migrate);
+  selectedId=tasks[0]?.id||null;
+  updateConn();
+  renderFilters(); renderList(); renderDetail();
+  if(remote===undefined) saveLocal(tasks);
+  setInterval(poll, 6000);
+})();
+</script>
+</body>
+</html>
