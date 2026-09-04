@@ -189,6 +189,30 @@
   .saved.show{opacity:1;transform:translateY(0)}
   input[type=date].input{color-scheme:dark}
 
+  /* Horas */
+  .hchip{
+    display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:999px;
+    font-size:12.5px;font-weight:600;white-space:nowrap;flex:none;
+    border:1px solid var(--stroke-strong);background:rgba(139,92,246,.14);color:var(--violet-lo);
+  }
+  .hoursbox{
+    display:flex;align-items:center;gap:12px;background:rgba(139,92,246,.08);
+    border:1px solid var(--stroke-strong);border-radius:12px;padding:12px 16px;
+  }
+  .hoursbox label{margin:0;font-size:13px;color:var(--violet-lo);font-weight:600}
+  .hoursbox input{
+    width:96px;background:rgba(8,7,15,.5);border:1px solid var(--stroke);color:var(--txt);
+    border-radius:8px;padding:9px 11px;font-size:16px;font-weight:600;font-family:inherit;transition:.12s;
+  }
+  .hoursbox input:focus{outline:none;border-color:var(--stroke-strong);box-shadow:0 0 0 3px rgba(139,92,246,.12)}
+  .hoursbox .u{color:var(--muted);font-size:13px}
+
+  .sidefoot{
+    padding:12px 20px;border-top:1px solid var(--stroke);font-size:12px;color:var(--muted);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .sidefoot b{color:var(--violet-lo);font-weight:700}
+
   @media(max-width:860px){
     body{overflow:auto}
     .app{grid-template-columns:1fr;height:auto}
@@ -215,6 +239,7 @@
     </div>
     <div class="filters" id="filters"></div>
     <div class="tasklist" id="taskList"></div>
+    <div class="sidefoot" id="sideFoot"></div>
   </aside>
   <main class="main" id="main"></main>
 </div>
@@ -245,13 +270,14 @@ const KEY = "ezTrello.tasks.v2";
 const uid = () => "t"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 function newTask(nombre=""){
   return { id:uid(), nombre, nombreTrello:"", link:"", descripcion:"",
-           estado:"por-iniciar", fechaInicio:"", fechaFin:"", pm:"", dev:"" };
+           estado:"por-iniciar", fechaInicio:"", fechaFin:"", horas:"", pm:"", dev:"" };
 }
 const seed = () => ["Tarea 1","Tarea 2","Tarea 3","Tarea 4"].map(n=>newTask(n));
 
 function migrate(t){
   if(t.pm===undefined) t.pm="";
   if(t.dev===undefined) t.dev="";
+  if(t.horas===undefined) t.horas="";
   if(t.asignado && !t.pm && !t.dev){
     if(/^\s*PM\s*:/i.test(t.asignado)) t.pm=t.asignado.replace(/^\s*PM\s*:\s*/i,"").trim();
     else t.dev=t.asignado.replace(/^\s*AI\s*Agent\s*Dev\s*:\s*/i,"").trim();
@@ -335,6 +361,13 @@ function renderFilters(){
 function renderList(){
   const list=$("#taskList"); list.innerHTML="";
   const shown=visibleTasks();
+
+  // total de horas (respeta filtro/búsqueda)
+  const total=shown.reduce((a,t)=>a+(parseFloat(t.horas)||0),0);
+  const foot=$("#sideFoot");
+  const filtered = filter!=="all" || search;
+  foot.innerHTML=`<span>${shown.length} tarea${shown.length===1?"":"s"}${filtered?" (filtrado)":""}</span><span>Total: <b>${(+total.toFixed(2))} h</b></span>`;
+
   if(!shown.length){
     list.innerHTML=`<div class="empty-list">${tasks.length? "Nada coincide con el filtro/búsqueda." : "No hay tareas todavía."}<br>${tasks.length?"":"Creá una con <b>+ Nueva tarea</b>."}</div>`;
     return;
@@ -344,11 +377,12 @@ function renderList(){
     const el=document.createElement("div");
     el.className="task"+(t.id===selectedId?" sel":"");
     const nombre=(t.nombre||"").trim();
+    const horas=(parseFloat(t.horas)||0)>0?` · ${esc(String(t.horas))} h`:"";
     el.innerHTML=`
       <span class="dot" style="color:var(${st.varc})"></span>
       <div class="meta">
         <div class="nm ${nombre?"":"empty"}">${nombre?esc(nombre):"Sin nombre"}</div>
-        <div class="sub">${t.nombreTrello?esc(t.nombreTrello)+" · ":""}${esc(st.label)}</div>
+        <div class="sub">${t.nombreTrello?esc(t.nombreTrello)+" · ":""}${esc(st.label)}${horas}</div>
       </div>`;
     el.onclick=()=>{selectedId=t.id;renderList();renderDetail();};
     list.appendChild(el);
@@ -386,6 +420,7 @@ function renderDetail(){
         <input class="title" id="f_nombre" placeholder="Nombre de la tarea…" value="${esc(t.nombre)}" />
       </div>
       <span class="badge" style="--c:var(${st.varc})"><span class="d"></span>${esc(st.label)}</span>
+      <span class="hchip" id="hHead" style="${(parseFloat(t.horas)||0)>0?'':'display:none'}">⏱ ${esc(String(t.horas||0))} h</span>
       <button class="del" id="delBtn">Eliminar</button>
     </div>
 
@@ -421,6 +456,13 @@ function renderDetail(){
         <div class="field"><label>Fecha de finalización</label>
           <input class="input" type="date" id="f_fin" value="${esc(t.fechaFin)}" /></div>
       </div>
+      <div class="field">
+        <div class="hoursbox">
+          <label>Cantidad de horas</label>
+          <input type="number" min="0" step="0.5" id="f_horas" placeholder="0" value="${esc(String(t.horas||''))}" />
+          <span class="u">horas</span>
+        </div>
+      </div>
       <div class="grid2">
         <div class="field"><label>PM</label>
           <select class="input" id="f_pm">${selectOptions(PMS, t.pm)}</select></div>
@@ -449,6 +491,12 @@ function renderDetail(){
     set("link",e.target.value);
     const href=e.target.value && /^https?:\/\//i.test(e.target.value)?e.target.value:(e.target.value?("https://"+e.target.value.replace(/^\/+/,"")):"");
     const a=$("#openLink"); a.href=href; a.classList.toggle("off",!href);
+  });
+  $("#f_horas").addEventListener("input",e=>{
+    set("horas",e.target.value);
+    const h=$("#hHead"), n=parseFloat(e.target.value)||0;
+    if(n>0){ h.style.display=""; h.textContent="⏱ "+e.target.value+" h"; } else h.style.display="none";
+    renderList();
   });
   $("#f_ini").addEventListener("change",e=>set("fechaInicio",e.target.value));
   $("#f_fin").addEventListener("change",e=>set("fechaFin",e.target.value));
